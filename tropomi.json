@@ -1,0 +1,10 @@
+{
+    "lat": "lat",
+    "lon": "lon",
+    "lat_bnd": "lat_bnds",
+    "lon_bnd": "lon_bnds",
+    "sza": "sza",
+    "vza": "vza",
+    "phaseAngle": "phase_angle",
+    "time": "TIME"
+}

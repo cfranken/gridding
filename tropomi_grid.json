@@ -1,0 +1,8 @@
+{
+    "sif": "sif",
+    "sif_sigma": "sif_err",
+    "cloud_fraction": "cloud_fraction",
+    "phase_angle": "phase_angle",
+    "sif_relative": "sif_relative",
+    "dcCorr": "daily_correction_factor"
+}
