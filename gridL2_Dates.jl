@@ -262,7 +262,7 @@ function main()
 			files = [files;glob(filePattern, folder)]
 		end
 		println(files)
-		fill!(mat_data,0.0)
+
     	# Loop through all files
 	    for a in files
 	        # Read NC file
@@ -312,11 +312,12 @@ function main()
 		co = 1
 		for (key, value) in dGrid
 			da = round.(mat_data[:,:,co]./mat_data[:,:,end],sigdigits=5)
-			da[NN.<1].=-999
+			da[NN.<0.2].=-999
 			NCDict[key][cT,:,:]=da
 			co += 1
 		end
 		cT += 1
+		fill!(mat_data,0.0)
 	end
 	close(dsOut)
 end
