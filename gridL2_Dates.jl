@@ -20,14 +20,10 @@ function parse_commandline()
     s = ArgParseSettings()
 
     @add_arg_table s begin
-    	"--inDict"
+    	"--Dict"
             help = "JSON dictionary file to use"
             arg_type = String
-            default = "/home/cfranken/tropomi.json"
-        "--gridDict"
-            help = "JSON dictionary file to use for gridding variables"
-            arg_type = String
-            default = "/home/cfranken/tropomi_grid.json"
+            default = "/home/cfranken/code/gitHub/Gridding/gridding/tropomi_all.json"
         "--outFile", "-o"
             help = "output filename (default OCO2_SIF_map.nc)"
             arg_type = String
@@ -191,7 +187,7 @@ function main()
 	dDay = Dates.Day(ar["dDays"])
 	println(startDate, " ", stopDate)
 	cT = length(startDate:dDay:stopDate)
-	
+
 
     # Just lazy (too cumbersome in code as often used variables here)
     latMax = ar["latMax"]
@@ -226,8 +222,14 @@ function main()
     n=zeros(Float32,(length(lat),length(lon)))
     SIF = zeros(Float32,(length(lat),length(lon)))
     # Parse JSON files as dictionary
-    d2 = JSON.parsefile(ar["inDict"])
-    dGrid = JSON.parsefile(ar["gridDict"])
+	jsonDict = JSON.parsefile(ar["Dict"])
+    d2 = jsonDict["basic"]
+    dGrid = jsonDict["grid"]
+	# Get file naming pattern (needs YYYY MM and DD in there)
+	fPattern = jsonDict["filePattern"]
+	# Get main folder for files:
+	folder = jsonDict["folder"]
+
 	NCDict= Dict{String, NCDatasets.CFVariable}()
 	println("Creating NC datasets in output:")
 	for (key, value) in dGrid
@@ -247,25 +249,27 @@ function main()
 	#global indices = zeros(Int32,(nGrid,nGrid,2))
 	global weights = zeros(Int32,(nGrid,nGrid))
 
-
-
 	# Loop through time:
 	# Time counter
 	cT = 1
 	for d in startDate:dDay:stopDate
+
 		files = String[];
 		for di in d:Dates.Day(1):d+dDay-Dates.Day(1)
 			#println("$(@sprintf("%04i-%02i-%02i", Dates.year(di),Dates.month(di),Dates.day(di)))")
-			files = [files;glob("TROPO_SIF_$(@sprintf("%04i-%02i-%02i", Dates.year(di),Dates.month(di),Dates.day(di)))_*.nc", ar["folder"])]
+
+			filePattern = reduce(replace,["YYYY" => lpad(Dates.year(di),4,"0"), "MM" => lpad(Dates.month(di),2,"0"),  "DD" => lpad(Dates.day(di),2,"0")], init=fPattern)
+			files = [files;glob(filePattern, folder)]
 		end
 		println(files)
+		fill!(mat_data,0.0)
     	# Loop through all files
 	    for a in files
 	        # Read NC file
 	        fin = Dataset(a)
 	        # Check lat/lon first to see what data to read in
-	        lat_in = fin[d2["lat"]].var[:]
-	        lon_in = fin[d2["lon"]].var[:]
+	        #lat_in = fin[d2["lat"]].var[:]
+	        #lon_in = fin[d2["lon"]].var[:]
 	        lat_in_ = fin[d2["lat_bnd"]].var[:]
 	        lon_in_ = fin[d2["lon_bnd"]].var[:]
 	        # Find all indices within lat/lon bounds:
@@ -274,13 +278,12 @@ function main()
 			minLon = minimum(lon_in_, dims=2)
 			maxLon = maximum(lon_in_, dims=2)
 
-			#idx = findall((lat_in.>latMin).&(lat_in.<latMax).&(lon_in.>lonMin).&(lon_in.<lonMax))
-			#println("IDX ", size(idx), " ", size(minLat[:,1]), " ", size(lat_in))
+			# Get indices within the lat/lon boudning box:
 			idx = findall((minLat[:,1].>latMin).&(maxLat[:,1].<latMax).&(minLon[:,1].>lonMin).&(maxLon[:,1].<lonMax))
-			#println("IDX ", size(idx))
+
 			# Read data only for non-empty indices
 	        if length(idx) > 0
-	            mat_in =  zeros(Float32,(length(lat_in),length(dGrid)+1))
+	            mat_in =  zeros(Float32,(length(lat_in_[:,1]),length(dGrid)+1))
 				dim = size(mat_in)
 	            # Read in all entries defined in JSON file:
 				co = 1
