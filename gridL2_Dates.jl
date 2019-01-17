@@ -28,6 +28,9 @@ function parse_commandline()
             help = "output filename (default OCO2_SIF_map.nc)"
             arg_type = String
             default = "OCO2_SIF_map.nc"
+		"--monthly"
+	        help = "Use time-steps in terms of months (not days)"
+	        action = :store_true
         "--latMin"
             help = "Lower latitude bound"
             arg_type = Float32
@@ -61,17 +64,9 @@ function parse_commandline()
 			    arg_type = String
 			    default = "2018-10-31"
 		"--dDays"
-				help = "Time steps in days"
+				help = "Time steps in days (or months if --monthly is set)"
 				arg_type = Int64
 				default = 8
-        "--folder"
-            help = "folder with L2 NC files"
-            arg_type = String
-            default = "/net/fluo/data2/projects/TROPOMI/nc_ungridded/"
-		"--fileFormat"
-	            help = "File format search string"
-	            arg_type = String
-	            default = "TROPO_SIF_YYYY-MM-DD_*.nc"
     end
     return parse_args(s)
 end
@@ -184,7 +179,11 @@ function main()
 	# Find files to be processed
 	startDate = DateTime(ar["startDate"])
 	stopDate = DateTime(ar["stopDate"])
-	dDay = Dates.Day(ar["dDays"])
+	if ar["monthly"]
+		dDay = Dates.Month(ar["dDays"])
+	else
+		dDay = Dates.Day(ar["dDays"])
+	end
 	println(startDate, " ", stopDate)
 	cT = length(startDate:dDay:stopDate)
 
@@ -259,9 +258,10 @@ function main()
 			#println("$(@sprintf("%04i-%02i-%02i", Dates.year(di),Dates.month(di),Dates.day(di)))")
 
 			filePattern = reduce(replace,["YYYY" => lpad(Dates.year(di),4,"0"), "MM" => lpad(Dates.month(di),2,"0"),  "DD" => lpad(Dates.day(di),2,"0")], init=fPattern)
+			#println(filePattern)
 			files = [files;glob(filePattern, folder)]
 		end
-		println(files)
+		#println(files)
 
     	# Loop through all files
 	    for a in files
@@ -272,6 +272,12 @@ function main()
 	        #lon_in = fin[d2["lon"]].var[:]
 	        lat_in_ = fin[d2["lat_bnd"]].var[:]
 	        lon_in_ = fin[d2["lon_bnd"]].var[:]
+			dim = size(lat_in_)
+			# Transpose if orders are swapped
+			if dim[1]==4
+				lat_in_ = lat_in_'
+				lon_in_ = lon_in_'
+			end
 	        # Find all indices within lat/lon bounds:
 			minLat = minimum(lat_in_, dims=2)
 			maxLat = maximum(lat_in_, dims=2)
@@ -283,11 +289,13 @@ function main()
 
 			# Read data only for non-empty indices
 	        if length(idx) > 0
+				#print(size(lat_in_))
 	            mat_in =  zeros(Float32,(length(lat_in_[:,1]),length(dGrid)+1))
 				dim = size(mat_in)
 	            # Read in all entries defined in JSON file:
 				co = 1
 	            for (key, value) in dGrid
+					#println(key, value)
 	            	mat_in[:,co]=fin[value].var[:]
 					co += 1
 	            end
