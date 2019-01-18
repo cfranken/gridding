@@ -320,7 +320,7 @@ function main()
 		co = 1
 		for (key, value) in dGrid
 			da = round.(mat_data[:,:,co]./mat_data[:,:,end],sigdigits=5)
-			da[NN.>0.0].=-999
+			da[NN.<1e-10].=-999
 			NCDict[key][cT,:,:]=da
 			co += 1
 		end
