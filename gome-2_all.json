@@ -4,7 +4,8 @@
     "time": "TIME"
 },
 	"grid":{
-		"sif": "SIF"
+		"sif": "SIF",
+		"sif_dc": "dcSIF"
 	},
 		"filePattern": "GOME-2_SIF_YYYY_MM_DD.nc",
 		"folder": "/net/fluo/data2/projects/GOME-2/consistent_GOME-2_sif/daily_pre_filtered_caltech/"
