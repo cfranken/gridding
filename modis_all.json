@@ -1,0 +1,14 @@
+{
+		"grid":{
+	  "refl_band1": "Nadir_Reflectance_Band1",
+		"refl_band2": "Nadir_Reflectance_Band2",
+	  "refl_band3": "Nadir_Reflectance_Band3",
+		"refl_band4": "Nadir_Reflectance_Band4",
+		"refl_band5": "Nadir_Reflectance_Band5",
+		"refl_band6": "Nadir_Reflectance_Band6",
+	  "refl_band7": "Nadir_Reflectance_Band7"
+	},
+
+		"filePattern": " MCD43A4.AYYYYDOY.*.hdf",
+		"folder": "/net/fluo/data2/projects/MODIS/MCD43A4/"
+}
