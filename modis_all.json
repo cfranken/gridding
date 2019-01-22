@@ -9,6 +9,6 @@
 	  "refl_band7": "Nadir_Reflectance_Band7"
 	},
 
-		"filePattern": " MCD43A4.AYYYYDOY.*.hdf",
+		"filePattern": "MCD43A4.AYYYYDOY.*.hdf",
 		"folder": "/net/fluo/data2/projects/MODIS/MCD43A4/"
 }

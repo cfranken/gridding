@@ -153,7 +153,7 @@ function main()
 
 			#********* This needs to be updated to use the Day of Year (and not MM and DD)!! *********#
 			filePattern = reduce(replace,["YYYY" => lpad(Dates.year(di),4,"0"), "MM" => lpad(Dates.month(di),2,"0"),  "DD" => lpad(Dates.day(di),2,"0")], init=fPattern)
-			#println(filePattern)
+			println(filePattern)
 			files = [files;glob(filePattern, folder)]
 		end
 		#println(files)

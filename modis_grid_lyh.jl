@@ -12,6 +12,7 @@ import JSON
 using Distributed, SharedArrays
 # Profiler
 using Profile
+using ProgressMeter
 
 function parse_commandline()
     s = ArgParseSettings()
@@ -73,6 +74,37 @@ function parse_commandline()
                 default = 1
     end
     return parse_args(s)
+end
+
+L=1/0.0001
+C1 = 6.
+C2 = 7.5
+G  = 2.5
+
+function aver!(mat_data, mat_in, iLon_,iLat_, idx)
+	NDVI = zeros(Float32,1)
+	d = size(mat_in)
+	for i = 1:length(idx)
+		A = view(mat_in,idx[i][2],idx[i][1],1:d[3]-1)
+		if !any(A.==32767)
+			for j=1:d[3]-1
+				mat_data[iLon_[i],iLat_[i],j] +=  mat_in[idx[i][2],idx[i][1],j]*0.0001
+			end
+			# Compute vegetation indices here:
+			# EVI
+			mat_data[iLon_[i],iLat_[i],d[3]] +=G*(A[2]-A[1])/(A[2]+C1*A[1]-C2*A[4]+L)
+			# NDVI
+			NDVI[1] = (A[2]-A[1])/(A[2]+A[1])
+			#println(NDVI, " ", A[2], " ", A[1])
+			mat_data[iLon_[i],iLat_[i],d[3]+1] += NDVI[1]
+			# NIRv
+			mat_data[iLon_[i],iLat_[i],d[3]+2] += NDVI[1]*A[2]*0.0001
+			# NWDI
+			mat_data[iLon_[i],iLat_[i],d[3]+3] +=(A[2]-A[5])/(A[2]+A[5])
+			# N
+			mat_data[iLon_[i],iLat_[i],end] +=   mat_in[idx[i][2],idx[i][1],end]
+		end
+	end
 end
 
 function main()
@@ -140,20 +172,33 @@ function main()
 		print(key," ")
 		NCDict[key] = defVar(dsOut,key,Float32,("time","lon","lat"),deflatelevel=4, fillvalue=-999)
 	end
+	ds_ndvi = defVar(dsOut,"NDVI",Float32,("time","lon","lat"),deflatelevel=4, fillvalue=-999)
+	ds_evi = defVar(dsOut,"EVI",Float32,("time","lon","lat"),deflatelevel=4, fillvalue=-999)
+	ds_nirv = defVar(dsOut,"NIRv",Float32,("time","lon","lat"),deflatelevel=4, fillvalue=-999)
+	ds_ndwi = defVar(dsOut,"NDWI",Float32,("time","lon","lat"),deflatelevel=4, fillvalue=-999)
+
 	println(" ")
 	#dSIF = defVar(dsOut,"sif",Float32,("lon","lat"),deflatelevel=4, fillvalue=-999)
 	dN = defVar(dsOut,"n",Float32,("time","lon","lat"),deflatelevel=4, fillvalue=-999)
     # Define data array
-    mat_data= zeros(Float32,(length(lon),length(lat),1+length(dGrid)))
+	# How many additional dataset (here, NDVI, EVI, NIRv and NDWI)
+	addData = 4
+    mat_data= zeros(Float32,(length(lon),length(lat),addData+1+length(dGrid)))
+	mat_in =  zeros(Float32,2400,2400,length(dGrid)+1)
 
+	ds = Dataset("/home/lyh/test_wholedata.nc","r")
+	lon_table = ds["longitude"]
+	lat_table = ds["latitude"]
 
 	# Loop through time:
 	# Time counter
 	cT = 1
+	p1 = Progress(cT)
 	for d in startDate:dDay:stopDate
-
+		ProgressMeter.next!(p1; showvalues = [(:Time, d)])
 		files = String[];
-		for di in d:Dates.Day(1):d+dDay-Dates.Day(1)
+		# Step through 8 days here, otherwise overkill
+		for di in d:Dates.Day(8):d+dDay-Dates.Day(1)
 
 			#********* This needs to be updated to use the Day of Year (and not MM and DD)!! *********#
 			# filePattern = reduce(replace,["YYYY" => lpad(Dates.year(di),4,"0"), "MM" => lpad(Dates.month(di),2,"0"),  "DD" => lpad(Dates.day(di),2,"0")], init=fPattern)
@@ -164,7 +209,10 @@ function main()
 		#println(files)
 
     	# Loop through all files
+		n = length(files)
+    	p = Progress(n)   # minimum update interval: 1 second
 	    for a in files
+			ProgressMeter.next!(p; showvalues = [(:File, a)])
 	        # Read NC file
 	        fin = Dataset(a)
 	        # Check lat/lon first to see what data to read in
@@ -172,9 +220,7 @@ function main()
 			#********* Here you need to read in lat/lon from MODIS (table or calculate on the fly) *********#
 			#lat_in = fin[d2["lat"]].var[:]
 	        #lon_in = fin[d2["lon"]].var[:]
-            ds = Dataset("/home/lyh/test_wholedata.nc","r")
-            lon_table = ds["longitude"]
-            lat_table = ds["latitude"]
+
             pos_start = findfirst("MCD43A4.A", a)
             filename = a[pos_start[1]:end]
             h = parse(Int32,filename[19:20])
@@ -182,7 +228,7 @@ function main()
 
             lon_in_ = lon_table[h+1,v+1,:,:]
             lat_in_ = lat_table[h+1,v+1,:,:]
-            
+
 			# Call the variables lat_in and lon_in and then best
 	        #lat_in_ = fin[d2["lat_bnd"]].var[:]
 	        #lon_in_ = fin[d2["lon_bnd"]].var[:]
@@ -191,11 +237,11 @@ function main()
 			# Get indices within the lat/lon boudning box:
 			#idx = findall((minLat[:,1].>latMin).&(maxLat[:,1].<latMax).&(minLon[:,1].>lonMin).&(maxLon[:,1].<lonMax))
             idx = findall((lat_in_.>latMin).&(lat_in_.<latMax).&(lon_in_.>lonMin).&(lon_in_.<lonMax))
-            
+			#println("Size of idx ", size(idx), " lat_in_ ", size(lat_in_))
 			# Read data only for non-empty indices
 	        if length(idx) > 0
 				#print(size(lat_in_))
-	            mat_in =  zeros(Float32,length(lat_in_[:,1]),length(lat_in_[1,:]),length(dGrid)+1)
+
 				dim = size(mat_in)
 	            # Read in all entries defined in JSON file:
 				co = 1
@@ -212,18 +258,12 @@ function main()
                 iLat_ = round.(Int64,((lat_in_[idx].-latMin)/(latMax-latMin)*length(lat)).+0.5.-1e-6,RoundNearestTiesAway)
                 iLon_ = round.(Int64,((lon_in_[idx].-lonMin)/(lonMax-lonMin)*length(lon)).+0.5.-1e-6,RoundNearestTiesAway)
 				# Once you have done this, we can chat about the gridding itself (just a few lines of code here)
-                
-                for i = 1:length(idx)
-                    null_array = zeros(length(dGrid)).+32767
-                    if sum(mat_in[idx[i][2],idx[i][1],1:end-1] .< null_array) == length(dGrid)
-                        mat_data[iLon_[i],iLat_[i],1:end-1] = mat_data[iLon_[i],iLat_[i],1:end-1] + mat_in[idx[i][2],idx[i][1],1:end-1]
-                        mat_data[iLon_[i],iLat_[i],end] = mat_data[iLon_[i],iLat_[i],end] + mat_in[idx[i][2],idx[i][1],end]
-                    end
-                end
 
-	            println("Read ", a, " ", length(idx))
+				aver!(mat_data, mat_in, iLon_,iLat_, idx)
+				fill!(mat_in,0.0)
+	            #println("Read ", a, " ", length(idx))
 	        else
-	            println("Read ", a, " ", length(idx))
+	            #println("Read ", a, " ", length(idx))
 	        end
 	        close(fin)
 	    end
@@ -237,16 +277,31 @@ function main()
 		dsTime[cT]=d
 		co = 1
 		for (key, value) in dGrid
-			da = round.(mat_data[:,:,co]./mat_data[:,:,end],sigdigits=5)
+			da = round.(mat_data[:,:,co]./mat_data[:,:,end],sigdigits=4)
+			#println(maximum(da), " ", maximum(NN))
 			#da[NN.<1e-10].=-999
-            da[NN.<1e4].=-999
+            da[NN.<10].=-999
 			NCDict[key][cT,:,:]=da
 			co += 1
 		end
+		d = size(mat_in)
+		da = round.(mat_data[:,:,d[3]]./mat_data[:,:,end],sigdigits=3)
+		da[NN.<10].=-999
+		ds_evi[cT,:,:] = da
+		da = round.(mat_data[:,:,d[3]+1]./mat_data[:,:,end],sigdigits=3)
+		da[NN.<10].=-999
+		ds_ndvi[cT,:,:] = da
+		da = round.(mat_data[:,:,d[3]+2]./mat_data[:,:,end],sigdigits=3)
+		da[NN.<10].=-999
+		ds_nirv[cT,:,:] = da
+		da = round.(mat_data[:,:,d[3]+3]./mat_data[:,:,end],sigdigits=3)
+		da[NN.<10].=-999
+		ds_ndwi[cT,:,:] = da
 		cT += 1
 		fill!(mat_data,0.0)
 	end
 	close(dsOut)
+	close(ds)
 end
 
 main()
