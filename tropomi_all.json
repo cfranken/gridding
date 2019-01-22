@@ -23,5 +23,5 @@
 		    "phaseAngle": ">10 ; <50"
 		},
 		"filePattern": "TROPO_SIF_YYYY-MM-DD_*.nc",
-		"folder": "/net/fluo/data2/projects/TROPOMI/nc_ungridded/"
+		"folder": "/net/fluo/data3/projects/TROPOMI/nc_ungridded/"
 }
