@@ -9,7 +9,7 @@ using Glob
 # JSON files
 import JSON
 # Parallel computing
-using Distributed, SharedArrays
+using Distributed, SharedArrays, DataStructures
 # Profiler
 using Profile
 using ProgressMeter
@@ -87,22 +87,27 @@ function aver!(mat_data, mat_in, iLon_,iLat_, idx)
 	for i = 1:length(idx)
 		A = view(mat_in,idx[i][2],idx[i][1],1:d[3]-1)
 		if !any(A.==32767)
-			for j=1:d[3]-1
-				mat_data[iLon_[i],iLat_[i],j] +=  mat_in[idx[i][2],idx[i][1],j]*0.0001
+			# NIR reflectance > 0.01, gets rid of water
+			if(A[2]*0.0001>0.03)
+				for j=1:d[3]-1
+					mat_data[iLon_[i],iLat_[i],j] +=  mat_in[idx[i][2],idx[i][1],j]*0.0001
+				end
+				# Compute vegetation indices here:
+				# EVI
+				mat_data[iLon_[i],iLat_[i],d[3]] +=G*(A[2]-A[1])/(A[2]+C1*A[1]-C2*A[4]+L)
+				# NDVI
+				NDVI[1] = (A[2]-A[1])/(A[2]+A[1])
+				#println(NDVI, " ", A[2]*0.0001, " ", A[1]*0.0001, " ", NDVI[1]*A[2]*0.0001," ", (A[2]*0.0001-A[1]*0.0001)/(A[2]*0.0001+A[1]*0.0001))
+
+				mat_data[iLon_[i],iLat_[i],d[3]+1] += NDVI[1]
+				#println(mat_data[iLon_[i],iLat_[i],d[3]+1] ," ", mat_data[iLon_[i],iLat_[i],2] )
+				# NIRv
+				mat_data[iLon_[i],iLat_[i],d[3]+2] += NDVI[1]*A[2]*0.0001
+				# NWDI
+				mat_data[iLon_[i],iLat_[i],d[3]+3] +=(A[2]-A[5])/(A[2]+A[5])
+				# N
+				mat_data[iLon_[i],iLat_[i],end] +=   mat_in[idx[i][2],idx[i][1],end]
 			end
-			# Compute vegetation indices here:
-			# EVI
-			mat_data[iLon_[i],iLat_[i],d[3]] +=G*(A[2]-A[1])/(A[2]+C1*A[1]-C2*A[4]+L)
-			# NDVI
-			NDVI[1] = (A[2]-A[1])/(A[2]+A[1])
-			#println(NDVI, " ", A[2], " ", A[1])
-			mat_data[iLon_[i],iLat_[i],d[3]+1] += NDVI[1]
-			# NIRv
-			mat_data[iLon_[i],iLat_[i],d[3]+2] += NDVI[1]*A[2]*0.0001
-			# NWDI
-			mat_data[iLon_[i],iLat_[i],d[3]+3] +=(A[2]-A[5])/(A[2]+A[5])
-			# N
-			mat_data[iLon_[i],iLat_[i],end] +=   mat_in[idx[i][2],idx[i][1],end]
 		end
 	end
 end
@@ -158,7 +163,7 @@ function main()
     n=zeros(Float32,(length(lat),length(lon)))
     SIF = zeros(Float32,(length(lat),length(lon)))
     # Parse JSON files as dictionary
-	jsonDict = JSON.parsefile(ar["Dict"])
+	jsonDict = JSON.parsefile(ar["Dict"], dicttype=DataStructures.OrderedDict)
     #d2 = jsonDict["basic"]
     dGrid = jsonDict["grid"]
 	# Get file naming pattern (needs YYYY MM and DD in there)
@@ -212,7 +217,7 @@ function main()
 		n = length(files)
     	p = Progress(n)   # minimum update interval: 1 second
 	    for a in files
-			ProgressMeter.next!(p; showvalues = [(:File, a)])
+
 	        # Read NC file
 	        fin = Dataset(a)
 	        # Check lat/lon first to see what data to read in
@@ -237,6 +242,7 @@ function main()
 			# Get indices within the lat/lon boudning box:
 			#idx = findall((minLat[:,1].>latMin).&(maxLat[:,1].<latMax).&(minLon[:,1].>lonMin).&(maxLon[:,1].<lonMax))
             idx = findall((lat_in_.>latMin).&(lat_in_.<latMax).&(lon_in_.>lonMin).&(lon_in_.<lonMax))
+			ProgressMeter.next!(p; showvalues = [(:File, a), (:N_pixels, size(idx))])
 			#println("Size of idx ", size(idx), " lat_in_ ", size(lat_in_))
 			# Read data only for non-empty indices
 	        if length(idx) > 0
@@ -276,26 +282,29 @@ function main()
 		# Write out time:
 		dsTime[cT]=d
 		co = 1
+		thr = 5
 		for (key, value) in dGrid
-			da = round.(mat_data[:,:,co]./mat_data[:,:,end],sigdigits=4)
+			da = round.(mat_data[:,:,co]./mat_data[:,:,end],sigdigits=5)
 			#println(maximum(da), " ", maximum(NN))
 			#da[NN.<1e-10].=-999
-            da[NN.<10].=-999
+            da[NN.<thr].=-999
 			NCDict[key][cT,:,:]=da
 			co += 1
 		end
 		d = size(mat_in)
-		da = round.(mat_data[:,:,d[3]]./mat_data[:,:,end],sigdigits=3)
-		da[NN.<10].=-999
+		println(d)
+		da = round.(mat_data[:,:,d[3]]./mat_data[:,:,end],sigdigits=5)
+
+		da[NN.<thr].=-999
 		ds_evi[cT,:,:] = da
-		da = round.(mat_data[:,:,d[3]+1]./mat_data[:,:,end],sigdigits=3)
-		da[NN.<10].=-999
+		da = round.(mat_data[:,:,d[3]+1]./mat_data[:,:,end],sigdigits=5)
+		da[NN.<thr].=-999
 		ds_ndvi[cT,:,:] = da
-		da = round.(mat_data[:,:,d[3]+2]./mat_data[:,:,end],sigdigits=3)
-		da[NN.<10].=-999
+		da = round.(mat_data[:,:,d[3]+2]./mat_data[:,:,end],sigdigits=5)
+		da[NN.<thr].=-999
 		ds_nirv[cT,:,:] = da
-		da = round.(mat_data[:,:,d[3]+3]./mat_data[:,:,end],sigdigits=3)
-		da[NN.<10].=-999
+		da = round.(mat_data[:,:,d[3]+3]./mat_data[:,:,end],sigdigits=5)
+		da[NN.<thr].=-999
 		ds_ndwi[cT,:,:] = da
 		cT += 1
 		fill!(mat_data,0.0)
