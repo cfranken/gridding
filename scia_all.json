@@ -1,0 +1,12 @@
+{   "basic":{
+    "lat_bnd": "LAT",
+    "lon_bnd": "LON",
+    "time": "TIME"
+},
+	"grid":{
+		"sif": "SIF",
+		"sif_dc": "dcSIF"
+	},
+		"filePattern": "SCIA_SIF_YYYY_MM_DD.nc",
+		"folder": "/net/fluo/data2/projects/SCIAMACHY/SIF/daily_pre_filtered/"
+}
