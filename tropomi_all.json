@@ -11,6 +11,7 @@
 },
 	"grid":{
 		"sif": "sif",
+		"sif_dc": "dcSIF",
 	    "sif_sigma": "sif_err",
 	    "cloud_fraction": "cloud_fraction",
 	    "phase_angle": "phase_angle",
