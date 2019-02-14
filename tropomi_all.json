@@ -11,6 +11,7 @@
 },
 	"grid":{
 		"sif": "sif",
+		"sif_dc": "dcSIF",
 	    "sif_sigma": "sif_err",
 	    "cloud_fraction": "cloud_fraction",
 	    "phase_angle": "phase_angle",
@@ -23,5 +24,5 @@
 		    "phaseAngle": ">10 ; <50"
 		},
 		"filePattern": "TROPO_SIF_YYYY-MM-DD_*.nc",
-		"folder": "/net/fluo/data2/projects/TROPOMI/nc_ungridded/"
+		"folder": "/net/fluo/data3/projects/TROPOMI/nc_ungridded/"
 }
