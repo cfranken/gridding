@@ -1,0 +1,8 @@
+{
+		"grid":{
+        "IGBP land cover": "LC_Type1"
+	},
+
+		"filePattern": "MCD12Q1.AYYYYDOY.*.hdf",
+		"folder": "/net/fluo/data2/projects/MODIS/MCD12Q1/"
+}
