@@ -10,7 +10,7 @@ using Statistics
 # File search and completion
 using Glob
 # JSON files
-import JSON
+using JSON
 # Parallel computing
 using Distributed, SharedArrays
 # Profiler
@@ -71,6 +71,14 @@ function parse_commandline()
     return parse_args(s)
 end
 
+function getFilter(name, jsonDict)
+	ff = try
+		jsonDict[name]
+	catch
+		Dict()
+	end
+	return ff
+end
 # This splits up the entire region into one grid set
 function divLine!(lat1,lon1,lat2,lon2,n, points,j )
     dLat = (lat2-lat1)/(2*n)
@@ -224,6 +232,15 @@ function main()
 	jsonDict = JSON.parsefile(ar["Dict"])
     d2 = jsonDict["basic"]
     dGrid = jsonDict["grid"]
+
+	f_eq = getFilter("filter_eq",jsonDict)
+	f_gt = getFilter("filter_gt",jsonDict)
+	f_lt = getFilter("filter_lt",jsonDict)
+
+	#f_eq = jsonDict["filter_eq"]
+	#f_eq = Dict()
+	println(f_eq)
+
 	# Get file naming pattern (needs YYYY MM and DD in there)
 	fPattern = jsonDict["filePattern"]
 	# Get main folder for files:
@@ -284,9 +301,26 @@ function main()
 			minLon = minimum(lon_in_, dims=2)
 			maxLon = maximum(lon_in_, dims=2)
 
-			# Get indices within the lat/lon boudning box:
-			idx = findall((minLat[:,1].>latMin).&(maxLat[:,1].<latMax).&(minLon[:,1].>lonMin).&(maxLon[:,1].<lonMax))
-
+			# Get indices within the lat/lon bounding box and check filter criteria:
+			bool_add = (minLat[:,1].>latMin) .+ (maxLat[:,1].<latMax) .+ (minLon[:,1].>lonMin) .+ (maxLon[:,1].<lonMax)
+			bCounter = 4
+			for (key, value) in f_eq
+				bool_add += (fin[key].var[:].==value)
+				bCounter+=1
+			end
+			for (key, value) in f_gt
+				bool_add += (fin[key].var[:].>value)
+				bCounter+=1
+			end
+			for (key, value) in f_lt
+				bool_add += (fin[key].var[:].<value)
+				bCounter+=1
+			end
+			#idx = findall((minLat[:,1].>latMin).&(maxLat[:,1].<latMax).&(minLon[:,1].>lonMin).&(maxLon[:,1].<lonMax))
+			idx = findall(bool_add.==bCounter)
+			#println(length(idx), " ", length(idx2))
+			#println(bCounter)
+			#println(fin[key].var[:])
 			# Read data only for non-empty indices
 	        if length(idx) > 0
 				#print(size(lat_in_))
