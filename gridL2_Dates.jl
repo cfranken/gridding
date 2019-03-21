@@ -116,6 +116,39 @@ function getPoints!(points, vert_lat, vert_lon, n,lats_0, lons_0,lats_1, lons_1 
     end
 end
 
+function getNC_var(fin, path, DD::Bool)
+	loc = split(path ,r"/")
+	#println(loc)
+	if length(loc)==1
+		return fin[path].var[:]
+	elseif length(loc)>1
+		gr = []
+		for i in 1:length(loc)-1
+			if i==1
+				gr = fin.group[loc[i]]
+			else
+				gr = gr.group[loc[i]]
+			end
+		end
+		#println(loc[end])
+		si = size(gr[loc[end]])
+		# DD means there is a 2nd index for footprint bounds of dimension 4!
+		if DD
+			if si[1]==4
+				return reshape(gr[loc[end]].var[:],4,prod(si[2:end]))'
+			elseif si[end]==4
+				return reshape(gr[loc[end]].var[:],prod(si[1:end-1]),4)
+			end
+		end
+		return reshape(gr[loc[end]].var[:],prod(si))
+		#a = reshape(gr[loc[end]],4,215*2906*1)
+		#return gr[loc[end]].var[:]
+	else
+		println("Something is off in getNC_var")
+	end
+
+end
+
 # Test for how fast we can compute point in distributed mode (not yet used)
 function compPoints!(lat,lon,n)
 	dim = size(lat)
@@ -237,10 +270,6 @@ function main()
 	f_gt = getFilter("filter_gt",jsonDict)
 	f_lt = getFilter("filter_lt",jsonDict)
 
-	#f_eq = jsonDict["filter_eq"]
-	#f_eq = Dict()
-	println(f_eq)
-
 	# Get file naming pattern (needs YYYY MM and DD in there)
 	fPattern = jsonDict["filePattern"]
 	# Get main folder for files:
@@ -275,20 +304,26 @@ function main()
 			#println("$(@sprintf("%04i-%02i-%02i", Dates.year(di),Dates.month(di),Dates.day(di)))")
 
 			filePattern = reduce(replace,["YYYY" => lpad(Dates.year(di),4,"0"), "MM" => lpad(Dates.month(di),2,"0"),  "DD" => lpad(Dates.day(di),2,"0")], init=fPattern)
-			#println(filePattern)
+			#println(filePattern, " ", folder)
 			files = [files;glob(filePattern, folder)]
+		end
+		fileSize = Int[];
+		for f in files
+			fileSize = [fileSize;stat(f).size]
 		end
 		#println(files)
 
     	# Loop through all files
-	    for a in files
+	    for a in files[fileSize.>0]
 	        # Read NC file
+			try
+			#println(fStats.size)
 	        fin = Dataset(a)
 	        # Check lat/lon first to see what data to read in
 	        #lat_in = fin[d2["lat"]].var[:]
 	        #lon_in = fin[d2["lon"]].var[:]
-	        lat_in_ = fin[d2["lat_bnd"]].var[:]
-	        lon_in_ = fin[d2["lon_bnd"]].var[:]
+	        lat_in_ = getNC_var(fin, d2["lat_bnd"],true)
+	        lon_in_ = getNC_var(fin, d2["lon_bnd"],true)
 			dim = size(lat_in_)
 			# Transpose if orders are swapped
 			if dim[1]==4
@@ -302,18 +337,19 @@ function main()
 			maxLon = maximum(lon_in_, dims=2)
 
 			# Get indices within the lat/lon bounding box and check filter criteria:
-			bool_add = (minLat[:,1].>latMin) .+ (maxLat[:,1].<latMax) .+ (minLon[:,1].>lonMin) .+ (maxLon[:,1].<lonMax)
-			bCounter = 4
+			bool_add = (minLat[:,1].>latMin) .+ (maxLat[:,1].<latMax) .+ (minLon[:,1].>lonMin) .+ (maxLon[:,1].<lonMax) .+ ((maxLon[:,1].-minLon[:,1]).<50)
+			bCounter = 5
 			for (key, value) in f_eq
-				bool_add += (fin[key].var[:].==value)
+
+				bool_add += (getNC_var(fin, key,false).==value)
 				bCounter+=1
 			end
 			for (key, value) in f_gt
-				bool_add += (fin[key].var[:].>value)
+				bool_add += (getNC_var(fin, key,false).>value)
 				bCounter+=1
 			end
 			for (key, value) in f_lt
-				bool_add += (fin[key].var[:].<value)
+				bool_add += (getNC_var(fin, key,false).<value)
 				bCounter+=1
 			end
 			#idx = findall((minLat[:,1].>latMin).&(maxLat[:,1].<latMax).&(minLon[:,1].>lonMin).&(maxLon[:,1].<lonMax))
@@ -330,7 +366,7 @@ function main()
 				co = 1
 	            for (key, value) in dGrid
 					#println(key, value)
-	            	mat_in[:,co]=fin[value].var[:]
+					mat_in[:,co]=getNC_var(fin, value,false)
 					co += 1
 	            end
 	            mat_in[:,end].=1
@@ -342,6 +378,9 @@ function main()
 	            println("Read ", a, " ", length(idx))
 	        end
 	        close(fin)
+			catch
+				println("Error in file caught")
+			end
 	    end
 		# Filter all data, set averages
 		dims = size(mat_data)
