@@ -18,11 +18,6 @@
 	    "sif_relative": "sif_relative",
 	    "dcCorr": "daily_correction_factor"
 	},
-		"filter":{
-			"sza": "<60 ; >10",
-		    "vza": "<40",
-		    "phaseAngle": ">10 ; <50"
-		},
 		"filePattern": "TROPO_SIF_YYYY-MM-DD_*.nc",
 		"folder": "/net/fluo/data3/projects/TROPOMI/nc_ungridded/"
 }

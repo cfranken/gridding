@@ -7,7 +7,7 @@
     "time": "PRODUCT/time_utc"
 },
 	"grid":{
-		"ch4": "PRODUCT/carbonmonoxide_total_column",
+		"co": "PRODUCT/carbonmonoxide_total_column",
 		"altitude": "PRODUCT/SUPPORT_DATA/INPUT_DATA/surface_altitude"
 	},
 		"filter_gt":{
