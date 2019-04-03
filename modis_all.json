@@ -10,5 +10,5 @@
 	},
 
 		"filePattern": "MCD43A4.AYYYYDOY.*.hdf",
-		"folder": "/net/fluo/data2/projects/MODIS/MCD43A4/"
+		"folder": "/net/fluo/data3/projects/MODIS/MODV6_Cmp_B/MOTA/MCD43A4.006/YYYY.MM.DD/"
 }
