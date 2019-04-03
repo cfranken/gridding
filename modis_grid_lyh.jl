@@ -203,13 +203,14 @@ function main()
 		ProgressMeter.next!(p1; showvalues = [(:Time, d)])
 		files = String[];
 		# Step through 8 days here, otherwise overkill
-		for di in d:Dates.Day(8):d+dDay-Dates.Day(1)
+		for di in d:Dates.Day(1):d+dDay-Dates.Day(1)
 
 			#********* This needs to be updated to use the Day of Year (and not MM and DD)!! *********#
 			# filePattern = reduce(replace,["YYYY" => lpad(Dates.year(di),4,"0"), "MM" => lpad(Dates.month(di),2,"0"),  "DD" => lpad(Dates.day(di),2,"0")], init=fPattern)
-			filePattern = reduce(replace,["YYYY" => lpad(Dates.year(di),4,"0"), "DOY" => lpad(Dates.dayofyear(di),3,"0")], init=fPattern)
-            #println(filePattern)
-			files = [files;glob(filePattern, folder)]
+			filePattern = reduce(replace,["YYYY" => lpad(Dates.year(di),4,"0"),  "MM" => lpad(Dates.month(di),2,"0"),  "DD" => lpad(Dates.day(di),2,"0"), "DOY" => lpad(Dates.dayofyear(di),3,"0")], init=fPattern)
+			folderPattern = reduce(replace,["YYYY" => lpad(Dates.year(di),4,"0"),  "MM" => lpad(Dates.month(di),2,"0"),  "DD" => lpad(Dates.day(di),2,"0")], init=folder)
+            println(filePattern)
+			files = [files;glob(filePattern, folderPattern)]
 		end
 		#println(files)
 
