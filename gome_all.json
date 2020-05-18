@@ -1,0 +1,22 @@
+{
+	"basic":{
+    "lat": "latitude",
+    "lon": "longitude",
+    "lat_bnd": "Latitude_corners",
+    "lon_bnd": "Longitude_corners",
+    "time": "time"
+},
+	"grid":{
+	  "sif": "SIF_uncorrected",
+		"sif_daily": "Daily_averaged_SIF",
+	  "cloud_fraction": "cloud_fraction",
+	  "surface_pressure": "Surface_pressure"
+	},
+		"filter":{
+			"sza": "<60 ; >10",
+		    "vza": "<40",
+		    "phaseAngle": ">10 ; <50"
+		},
+		"filePattern": "YYYY/MM/NSIFv2.6.1.YYYYMMDD_v2.8.2_all.nc",
+		"folder": "/net/fluo/data2/projects/GOME/level2/"
+}

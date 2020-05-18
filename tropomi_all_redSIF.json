@@ -1,0 +1,16 @@
+{
+	"basic":{
+    "lat": "lat",
+    "lon": "lon",
+    "lat_bnd": "lat_bnds",
+    "lon_bnd": "lon_bnds",
+    "time": "TIME"
+},
+	"grid":{
+		"sif": "sif",
+		"sif_dc": "dcSIF",
+	    "dcCorr": "daily_correction_factor"
+	},
+		"filePattern": "TROPO_redSIF_YYYY-MM-DD_*.nc",
+		"folder": "/net/fluo/data3/projects/TROPOMI/redSIF/nc_ungridded/"
+}

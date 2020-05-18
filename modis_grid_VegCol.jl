@@ -251,8 +251,9 @@ function main()
 	    for a in files
 
 	        # Read NC file
-			fin = Dataset(a)
 			try
+				fin = Dataset(a)
+
 
 		        # Check lat/lon first to see what data to read in
 
@@ -306,8 +307,9 @@ function main()
 		        else
 		            #println("Read ", a, " ", length(idx))
 		        end
-			finally
-		        close(fin)
+				close(fin)
+            catch e
+				println(e)
 			end
 	    end
 		# Filter all data, set averages

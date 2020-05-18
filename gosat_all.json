@@ -1,0 +1,19 @@
+{
+	"basic":{
+    "lat": "Latidude",
+    "lon": "Longitude",
+    "lat_bnd": "Latitude_corners",
+    "lon_bnd": "Longitude_corners",
+    "sza": "SZA",
+    "vza": "VZA",
+    "time": "Delta_Time"
+},
+	"grid":{
+		"sif": "Daily_Averaged_SIF",
+		"sif_757P": "SIF_P_757nm",
+		"sif_771P": "SIF_P_771nm",
+	    "dcCorr": "daily_correction_factor"
+	},
+		"filePattern": "YYYY/MM/GOSAT-SIF-L2-??MMDD-B9200-fv1.nc",
+		"folder": "/net/fluo/data1/data/ACOS/GOSAT_LITE/"
+}

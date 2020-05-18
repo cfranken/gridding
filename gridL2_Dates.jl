@@ -99,7 +99,7 @@ function divLine2!(lat1,lon1,lat2,lon2,n, lats, lons)
     dLon = (lon2-lon1)/(2*n)
 	startLat = lat1+dLat
 	startLon = lon1+dLon
-	for i in 1:n
+	@inbounds for i in 1:n
 	    lats[i] = startLat+2*(i-1)*dLat
 	    lons[i] = startLon+2*(i-1)*dLon
 	end
@@ -184,7 +184,7 @@ function favg_all!(arr,lat,lon,inp,s,s2,n, latMin, latMax, lonMin, lonMax, nLat,
 	global dimLat = maxLat-minLat
 	global dimLon = maxLon-minLon
 	fac = n^2
-    for i in 1:s
+    @inbounds for i in 1:s
 		#println(i, " ", dimLat[i], " ", dimLon[i])
 		# Take it easy if all corners already fall into one grid box:
 		if (dimLat[i]==1) & (dimLon[i]==1)
@@ -199,7 +199,7 @@ function favg_all!(arr,lat,lon,inp,s,s2,n, latMin, latMax, lonMin, lonMax, nLat,
 			#iy[iy .> dim[1]].=dim[1]
 			#iy[iy .< 1].=1
 
-	        for j in eachindex(ix)
+	        @inbounds for j in eachindex(ix)
 	            for z in 1:s2
 	                arr[iy[j],ix[j],z] +=  inp[i,z]
 	                #println(arr[ix[j],iy[j],z])
@@ -278,7 +278,7 @@ function main()
 	NCDict= Dict{String, NCDatasets.CFVariable}()
 	println("Creating NC datasets in output:")
 	for (key, value) in dGrid
-		print(key," ")
+		println(key," ", value)
 		NCDict[key] = defVar(dsOut,key,Float32,("time","lon","lat"),deflatelevel=4, fillvalue=-999)
 	end
 	println(" ")
@@ -316,14 +316,18 @@ function main()
     	# Loop through all files
 	    for a in files[fileSize.>0]
 	        # Read NC file
-			try
+		#	try
+			println(a)
 			#println(fStats.size)
 	        fin = Dataset(a)
+		println("Read, ", a)
 	        # Check lat/lon first to see what data to read in
 	        #lat_in = fin[d2["lat"]].var[:]
 	        #lon_in = fin[d2["lon"]].var[:]
+		println(d2["lat_bnd"])
 	        lat_in_ = getNC_var(fin, d2["lat_bnd"],true)
 	        lon_in_ = getNC_var(fin, d2["lon_bnd"],true)
+		#println("Read")
 			dim = size(lat_in_)
 			# Transpose if orders are swapped
 			if dim[1]==4
@@ -340,7 +344,7 @@ function main()
 			bool_add = (minLat[:,1].>latMin) .+ (maxLat[:,1].<latMax) .+ (minLon[:,1].>lonMin) .+ (maxLon[:,1].<lonMax) .+ ((maxLon[:,1].-minLon[:,1]).<50)
 			bCounter = 5
 			for (key, value) in f_eq
-
+				#println(key, " ", value)
 				bool_add += (getNC_var(fin, key,false).==value)
 				bCounter+=1
 			end
@@ -378,24 +382,29 @@ function main()
 	            println("Read ", a, " ", length(idx))
 	        end
 	        close(fin)
-			catch
-				println("Error in file caught")
-			end
+	#		catch
+	#			println("Error in file caught")
+	#		end
 	    end
 		# Filter all data, set averages
 		dims = size(mat_data)
 		println("Averaging final product...")
+		if maximum(mat_data[:,:,end])>0
+			NN = mat_data[:,:,end]./nGrid^2
+			dN[cT,:,:]=NN
+			# Write out time:
+			dsTime[cT]=d
+			co = 1
+			for (key, value) in dGrid
+				da = round.(mat_data[:,:,co]./mat_data[:,:,end],sigdigits=5)
+				da[NN.<1e-10].=-999
+				@inbounds NCDict[key][cT,:,:]=da
+				co += 1
+			end
+		else
+			dN[cT,:,:]=0
+			dsTime[cT]=d
 
-		NN = mat_data[:,:,end]./nGrid^2
-		dN[cT,:,:]=NN
-		# Write out time:
-		dsTime[cT]=d
-		co = 1
-		for (key, value) in dGrid
-			da = round.(mat_data[:,:,co]./mat_data[:,:,end],sigdigits=5)
-			da[NN.<1e-10].=-999
-			NCDict[key][cT,:,:]=da
-			co += 1
 		end
 		cT += 1
 		fill!(mat_data,0.0)
