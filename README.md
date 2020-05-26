@@ -1,2 +1,4 @@
 # Generic Gridding Routine
 One single Julia code to grid all kinds of satellite data onto rectangular grid at arbitrary spacing (and determined spatial and temporal resolution). Input defined just via json files.
+
+The main program, gridL2_Dates.jl, can compute gridded averages and save everything into a netCDF file that can be rea via tools such as python, Julia, Panoply, etc (lat/lon/time). Most importantly, it can oversample, i.e. the gridding takes the actual footprint overlap with the final grid into account. This is done by splitting a footprint via its corner coordinates into a set of points nxn within that footprint (typicall n=10, i.e. 100 points). For these, a simple "in-the-box" gridding routine will be applied, i.e. tha algorithm finds in which grid boxe each sub-pixel of a footprint falls. This results in fractional "samples" per grid box.  
