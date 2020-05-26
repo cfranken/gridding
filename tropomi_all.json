@@ -1,23 +1,25 @@
 {
 	"basic":{
-    "lat": "lat",
-    "lon": "lon",
-    "lat_bnd": "lat_bnds",
-    "lon_bnd": "lon_bnds",
-    "sza": "sza",
-    "vza": "vza",
-    "phaseAngle": "phase_angle",
-    "time": "TIME"
+    	"lat": "lat",
+    	"lon": "lon",
+    	"lat_bnd": "lat_bnds",
+    	"lon_bnd": "lon_bnds",
+    	"sza": "sza",
+    	"vza": "vza",
+    	"phaseAngle": "phase_angle",
+    	"time": "TIME"
 },
 	"grid":{
 		"sif": "sif",
 		"sif_dc": "dcSIF",
-	    "sif_sigma": "sif_err",
-	    "cloud_fraction": "cloud_fraction",
-	    "phase_angle": "phase_angle",
-	    "sif_relative": "sif_relative",
-	    "dcCorr": "daily_correction_factor"
+	    	"sif_sigma": "sif_err",
+	    	"cloud_fraction": "cloud_fraction",
+	    	"phase_angle": "phase_angle",
+	    	"sif_relative": "sif_relative",
+	    	"dcCorr": "daily_correction_factor"
 	},
-		"filePattern": "TROPO_SIF_YYYY-MM-DD_*.nc",
-		"folder": "/net/fluo/data3/projects/TROPOMI/nc_ungridded/"
+	"filter_lt":{"sza": 80},
+	"filter_gt":{"phase_angle": 10 },
+	"filePattern": "TROPO_SIF_YYYY-MM-DD_*.nc",
+	"folder": "/net/fluo/data3/projects/TROPOMI/nc_ungridded/"
 }

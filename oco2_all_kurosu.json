@@ -1,23 +1,18 @@
 {
 	"basic":{
-    "lat": "latitude",
-    "lon": "longitude",
-    "lat_bnd": "Latitude_Corners",
-    "lon_bnd": "Longitude_Corners",
-    "time": "time"
+	"lat": "latitude",
+    	"lon": "longitude",
+    	"lat_bnd": "Latitude_Corners",
+    	"lon_bnd": "Longitude_Corners",
+    	"time": "time"
 },
 	"grid":{
 		"sif_757": "Daily_SIF_757nm",
 		"sif_771": "Daily_SIF_771nm",
 		"sif_757_relative": "Science/SIF_Relative_757nm",
 		"sif_771_relative": "Science/SIF_Relative_771nm",
-	    "dcCorr": "Science/daily_correction_factor"
+		"dcCorr": "Science/daily_correction_factor"
 	},
-		"filter":{
-			"sza": "<60 ; >10",
-		    "vza": "<40",
-		    "phaseAngle": ">10 ; <50"
-		},
-		"filePattern": "YYYY/MM/oco2_LtSIF_??MMDD_*.nc4",
-		"folder": "/net/fluo/data2/groupMembers/cfranken/data/kurosu/test_data/daily/oco2/new/"
+	"filePattern": "YYYY/MM/oco2_LtSIF_??MMDD_*.nc4",
+	"folder": "/net/fluo/data2/groupMembers/cfranken/data/kurosu/test_data/daily/oco2/new/"
 }

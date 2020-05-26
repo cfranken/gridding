@@ -1,26 +1,21 @@
 {
 	"basic":{
-    "lat": "latitude",
-    "lon": "longitude",
-    "lat_bnd": "footprint_vertex_latitude",
-    "lon_bnd": "footprint_vertex_longitude",
-    "time": "time"
+    	"lat": "latitude",
+    	"lon": "longitude",
+    	"lat_bnd": "footprint_vertex_latitude",
+    	"lon_bnd": "footprint_vertex_longitude",
+    	"time": "time"
 },
 	"grid":{
 		"sif_757": "SIF_757nm",
 		"sif_771": "SIF_771nm",
 		"sif_757_relative": "SIF_757nm_relative",
 		"sif_771_relative": "SIF_771nm_relative",
-	    "sif_757_sigma": "SIF_757nm_uncert",
-			"sif_771_sigma": "SIF_771nm_uncert",
-	    "surface_altitude": "surface_altitude",
-	    "dcCorr": "daily_correction_factor"
+	    	"sif_757_sigma": "SIF_757nm_uncert",
+		"sif_771_sigma": "SIF_771nm_uncert",
+	    	"surface_altitude": "surface_altitude",
+	    	"dcCorr": "daily_correction_factor"
 	},
-		"filter":{
-			"sza": "<60 ; >10",
-		    "vza": "<40",
-		    "phaseAngle": ">10 ; <50"
-		},
-		"filePattern": "YYYY/MM/oco2_LtSIF_??MMDD_*.nc4",
-		"folder": "/net/fluo/data1/ftp/data/OCO2/sif_lite_B8100/"
+	"filePattern": "YYYY/MM/oco2_LtSIF_??MMDD_*.nc4",
+	"folder": "/net/fluo/data1/ftp/data/OCO2/sif_lite_B8100/"
 }
