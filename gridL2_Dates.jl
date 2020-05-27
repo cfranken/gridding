@@ -31,6 +31,9 @@ function parse_commandline()
         "--monthly"
             help = "Use time-steps in terms of months (not days)"
             action = :store_true
+        "--compSTD"
+            help = "compute standard deviation within dataset"
+            action = :store_true
         "--latMin"
             help = "Lower latitude bound"
             arg_type = Float32
@@ -182,7 +185,8 @@ end
 #   return a
 #end
 
-function favg_all!(arr,lat,lon,inp,s,s2,n, latMin, latMax, lonMin, lonMax, nLat, nLon, points)
+function favg_all!(arr,std_arr, weight_arr, compSTD, lat,lon,inp,s,s2,n, latMin, latMax, lonMin, lonMax, nLat, nLon, points)
+
     dim = size(arr)
     #println(dim)
     # Predefine some arrays to reduce allocations
@@ -200,32 +204,40 @@ function favg_all!(arr,lat,lon,inp,s,s2,n, latMin, latMax, lonMin, lonMax, nLat,
     maxLon = maximum(Int32,floor.(lon), dims=2)
     distLon = maxLon-minLon
     # How many individual grid cells might actually be there:
-    global dimLat = maxLat-minLat
-    global dimLon = maxLon-minLon
-    fac = n^2
+    dimLat = maxLat-minLat
+    dimLon = maxLon-minLon
+    fac = Float32(1/n^2)
+
     @inbounds for i in 1:s
         #println(i, " ", dimLat[i], " ", dimLon[i])
         # Take it easy if all corners already fall into one grid box:
         if (dimLat[i]==1) & (dimLon[i]==1)
+            
+            weight_arr[iLon[i,1],iLat[i,1]] += 1
             for z in 1:s2
-                    arr[iLon[i,1],iLat[i,1],z] +=  fac*inp[i,z]
+                mean_old = arr[iLon[i,1],iLat[i,1],z];
+                arr[iLon[i,1],iLat[i,1],z] = mean_old .+ 1/weight_arr[iLon[i,1],iLat[i,1]] .* (inp[i,z]-mean_old);
+                if compSTD
+                    std_arr[iLon[i,1],iLat[i,1],z] += (inp[i,z]-mean_old) .* (inp[i,z]-arr[iLon[i,1],iLat[i,1],z])
+                end
             end
         # if not, compute appropriate weights
         elseif (distLon[i])<n
             getPoints!(points,lat[i,:],lon[i,:],n,lats_0, lons_0,lats_1, lons_1 )
+
             ix[:] = floor.(Int32,points[:,:,1][:])
             iy[:] = floor.(Int32,points[:,:,2][:])
-            #iy[iy .> dim[1]].=dim[1]
-            #iy[iy .< 1].=1
-
+            
             @inbounds for j in eachindex(ix)
+                weight_arr[iy[j],ix[j]] += fac;
                 for z in 1:s2
-                    arr[iy[j],ix[j],z] +=  inp[i,z]
-                    #println(arr[ix[j],iy[j],z])
+                    mean_old = arr[iy[j],ix[j],z]
+                    arr[iy[j],ix[j],z] = mean_old .+ fac/weight_arr[iy[j],ix[j]] .* (inp[i,z]-mean_old);
+                    if compSTD
+                        std_arr[iy[j],ix[j],z] +=  fac .* (inp[i,z]-mean_old) .* (inp[i,z]-arr[iy[j],ix[j],z])
+                    end
                 end
             end
-        #else
-            #println("Warning ", iLat[i], " ",iLon[i], " ", maxLon[i]-minLon[i])
         end
     end
 end
@@ -246,7 +258,6 @@ function main()
     end
     println(startDate, " ", stopDate)
     cT = length(startDate:dDay:stopDate)
-
 
     # Just lazy (too cumbersome in code as often used variables here)
     latMax = ar["latMax"]
@@ -282,9 +293,10 @@ function main()
     SIF = zeros(Float32,(length(lat),length(lon)))
     # Parse JSON files as dictionary
     jsonDict = JSON.parsefile(ar["Dict"])
-    d2 = jsonDict["basic"]
-    dGrid = jsonDict["grid"]
+    d2       = jsonDict["basic"]
+    dGrid    = jsonDict["grid"]
 
+    # Read all filters:
     f_eq = getFilter("filter_eq",jsonDict)
     f_gt = getFilter("filter_gt",jsonDict)
     f_lt = getFilter("filter_lt",jsonDict)
@@ -292,33 +304,39 @@ function main()
     # Get file naming pattern (needs YYYY MM and DD in there)
     fPattern = jsonDict["filePattern"]
     # Get main folder for files:
-    folder = jsonDict["folder"]
+    folder   = jsonDict["folder"]
 
     NCDict= Dict{String, NCDatasets.CFVariable}()
     println("Creating NC datasets in output:")
     for (key, value) in dGrid
         println(key," ", value)
         NCDict[key] = defVar(dsOut,key,Float32,("time","lon","lat"),deflatelevel=4, fillvalue=-999)
+        if ar["compSTD"]
+            key2 = key*"_std"
+            NCDict[key2] = defVar(dsOut,key2,Float32,("time","lon","lat"),deflatelevel=4, fillvalue=-999, comment="Standard Deviation from data")
+        end
     end
     println(" ")
     #dSIF = defVar(dsOut,"sif",Float32,("lon","lat"),deflatelevel=4, fillvalue=-999)
     dN = defVar(dsOut,"n",Float32,("time","lon","lat"),deflatelevel=4, fillvalue=-999, units="", long_name="Number of pixels in average")
     # Define data array
-    mat_data= zeros(Float32,(length(lon),length(lat),1+length(dGrid)))
+    mat_data          = zeros(Float32,(length(lon),length(lat),length(dGrid)))
+    mat_data_variance = zeros(Float32,(length(lon),length(lat),length(dGrid)))
+    mat_data_weights  = zeros(Float32,(length(lon),length(lat)))
 
     # Still hard-coded here, can be changed:
-    nGrid = 10
+    nGrid = 10;
 
     points = zeros(Float32,(nGrid,nGrid,2))
     #global indices = zeros(Int32,(nGrid,nGrid,2))
-    global weights = zeros(Int32,(nGrid,nGrid))
 
+    # Just to make sure we fill in attributes first time we read actual data:
     fillAttrib = true;
+
     # Loop through time:
     # Time counter
     cT = 1
     for d in startDate:dDay:stopDate
-
         files = String[];
         for di in d:Dates.Day(1):d+dDay-Dates.Day(1)
             #println("$(@sprintf("%04i-%02i-%02i", Dates.year(di),Dates.month(di),Dates.day(di)))")
@@ -335,18 +353,14 @@ function main()
 
         # Loop through all files
         for a in files[fileSize.>0]
-            # Read NC file
-        #   try
-            #println(a)
-            #println(fStats.size)
+
             fin = Dataset(a)
-            println("Read, ", a)
-            # Check lat/lon first to see what data to read in
-            #lat_in = fin[d2["lat"]].var[:]
-            #lon_in = fin[d2["lon"]].var[:]
-            #println(d2["lat_bnd"])
+            #println("Read, ", a)
+            
+            # Read lat/lon bounds (required, maybe can change this to simple gridding in the future with just center):
             lat_in_ = getNC_var(fin, d2["lat_bnd"],true)
             lon_in_ = getNC_var(fin, d2["lon_bnd"],true)
+            
             #println("Read")
             dim = size(lat_in_)
 
@@ -355,14 +369,16 @@ function main()
                 lat_in_ = lat_in_'
                 lon_in_ = lon_in_'
             end
+
             # Find all indices within lat/lon bounds:
             minLat = minimum(lat_in_, dims=2)
             maxLat = maximum(lat_in_, dims=2)
             minLon = minimum(lon_in_, dims=2)
             maxLon = maximum(lon_in_, dims=2)
 
-            # Get indices within the lat/lon bounding box and check filter criteria:
+            # Get indices within the lat/lon bounding box and check filter criteria (the last one filters out data crossing the date boundary):
             bool_add = (minLat[:,1].>latMin) .+ (maxLat[:,1].<latMax) .+ (minLon[:,1].>lonMin) .+ (maxLon[:,1].<lonMax) .+ ((maxLon[:,1].-minLon[:,1]).<50)
+            
             bCounter = 5
             # Look for equalities
             for (key, value) in f_eq
@@ -387,7 +403,7 @@ function main()
             # Read data only for non-empty indices
             if length(idx) > 0
                 #print(size(lat_in_))
-                mat_in =  zeros(Float32,(length(lat_in_[:,1]),length(dGrid)+1))
+                mat_in =  zeros(Float32,(length(lat_in_[:,1]),length(dGrid)))
                 dim = size(mat_in)
                 # Read in all entries defined in JSON file:
                 co = 1
@@ -398,8 +414,6 @@ function main()
                         attribs = ["units","long_name","valid_range","description"]
                         for at in attribs
                             try
-                                @show value, at
-                                @show getNC_attrib(fin, value, at)
                                 NCDict[key].attrib[at] = getNC_attrib(fin, value, at)
                             catch e
                                 @show e
@@ -416,10 +430,10 @@ function main()
                     co += 1
                 end
 
-                mat_in[:,end].=1
                 iLat_ = ((lat_in_[idx,:].-latMin)/(latMax-latMin)*length(lat)).+1
                 iLon_ = ((lon_in_[idx,:].-lonMin)/(lonMax-lonMin)*length(lon)).+1
-                @time  favg_all!(mat_data, iLat_,iLon_,mat_in[idx,:],length(idx),dim[2],nGrid, latMin, latMax, lonMin,lonMax, length(lat), length(lon), points )
+
+                @time  favg_all!(mat_data, mat_data_variance, mat_data_weights, ar["compSTD"], iLat_,iLon_,mat_in[idx,:],length(idx),dim[2],nGrid, latMin, latMax, lonMin,lonMax, length(lat), length(lon), points )
                 println("Read ", a, " ", length(idx))
             else
                 println("Read ", a, " ", length(idx))
@@ -432,16 +446,21 @@ function main()
         # Filter all data, set averages, still need to change row/column order here in the future!
         dims = size(mat_data)
         println("Averaging final product...")
-        if maximum(mat_data[:,:,end])>0
-            NN = mat_data[:,:,end]./nGrid^2
-            dN[cT,:,:]=NN
-            # Write out time:
+        if maximum(mat_data_weights)>0
+            dN[cT,:,:] = mat_data_weights
             dsTime[cT]=d
             co = 1
             for (key, value) in dGrid
-                da = round.(mat_data[:,:,co]./mat_data[:,:,end],sigdigits=5)
-                da[NN.<1e-10].=-999
-                @inbounds NCDict[key][cT,:,:]=da
+                da = round.(mat_data[:,:,co],sigdigits=6)
+                da[mat_data_weights.<1e-10].=-999
+                NCDict[key][cT,:,:]=da
+                if ar["compSTD"]
+                    da = round.(sqrt.(mat_data_variance[:,:,co] ./ mat_data_weights)  ,sigdigits=6)
+                    da[mat_data_weights.<1e-10].=-999
+                    key2 = key*"_std"
+                    NCDict[key2][cT,:,:]=da
+                end
+                #NCDict[key][cT,:,:]=da
                 co += 1
             end
         else
@@ -451,6 +470,8 @@ function main()
         end
         cT += 1
         fill!(mat_data,0.0)
+        fill!(mat_data_weights,0.0)
+        fill!(mat_data_variance,0.0)
     end
     close(dsOut)
 end
