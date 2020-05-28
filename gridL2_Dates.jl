@@ -19,7 +19,7 @@ using JSON
 function parse_commandline()
     s = ArgParseSettings()
 
-    @add_arg_table s begin
+    @add_arg_table! s begin
         "--Dict"
             help = "JSON dictionary file to use"
             arg_type = String
@@ -89,7 +89,7 @@ function divLine!(lat1,lon1,lat2,lon2,n, points,j )
     dLon = (lon2-lon1)/(2*n)
     startLat = lat1+dLat
     startLon = lon1+dLon
-    for i in 1:n
+    @inbounds for i in 1:n
         #println(startLat+2*(i-1)*dLat, " ", startLon+2*(i-1)*dLon)
         #weights[(iLat-minLat+1), (iLon-minLon+1)]+=1
         points[j,i,1] = startLat+2*(i-1)*dLat
@@ -120,35 +120,40 @@ function getPoints!(points, vert_lat, vert_lon, n,lats_0, lons_0,lats_1, lons_1 
     end
 end
 
+# Still need to make sure the corners are read in properly!
 function getNC_var(fin, path, DD::Bool)
-    loc = split(path ,r"/")
-    #println(loc)
-    if length(loc)==1
-        return fin[path].var[:]
-    elseif length(loc)>1
-        gr = []
-        for i in 1:length(loc)-1
-            if i==1
-                gr = fin.group[loc[i]]
+    try
+        loc = split(path ,r"/")
+        #println(loc)
+        if length(loc)==1
+            return fin[path].var[:]
+        elseif length(loc)>1
+            gr = []
+            for i in 1:length(loc)-1
+                if i==1
+                    gr = fin.group[loc[i]]
+                else
+                    gr = gr.group[loc[i]]
+                end
+            end
+
+            #println(loc[end])
+            si = size(gr[loc[end]])
+            # DD means there is a 2nd index for footprint bounds of dimension 4!
+            if DD
+                if si[1]==4
+                    return reshape(gr[loc[end]].var[:],4,prod(si[2:end]))'
+                elseif si[end]==4
+                    return reshape(gr[loc[end]].var[:],prod(si[1:end-1]),4)
+                end
             else
-                gr = gr.group[loc[i]]
+                return reshape(gr[loc[end]].var[:],prod(si))
             end
         end
-        #println(loc[end])
-        si = size(gr[loc[end]])
-        # DD means there is a 2nd index for footprint bounds of dimension 4!
-        if DD
-            if si[1]==4
-                return reshape(gr[loc[end]].var[:],4,prod(si[2:end]))'
-            elseif si[end]==4
-                return reshape(gr[loc[end]].var[:],prod(si[1:end-1]),4)
-            end
-        end
-        return reshape(gr[loc[end]].var[:],prod(si))
-        #a = reshape(gr[loc[end]],4,215*2906*1)
-        #return gr[loc[end]].var[:]
-    else
-        println("Something is off in getNC_var")
+    catch e
+        @show e
+        println("Error in getNC_var ", path)
+        return 0.0
     end
 
 end
@@ -354,6 +359,7 @@ function main()
         # Loop through all files
         for a in files[fileSize.>0]
 
+            
             fin = Dataset(a)
             #println("Read, ", a)
             
