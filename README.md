@@ -60,7 +60,7 @@ optional arguments:
   -h, --help            show this help message and exit
 ```
 
-The most important part of this script is `--Dict` as most description about the files you want to grid are within the json file you will use here. You can also change the spatial resolution (e.g. `--dLat`), the lat/lon boundaries if you don't want the globe and the date ranges and temporal resolution you are interested in (`--startDate`, `--stopDate`, `--dDays` defines the number of days you want to aggregate together (if you set `--monthly`, this will be the step in months).
+The most important part of this script is `--Dict` as most description about the files you want to grid are within the json file you will use here. You can also change the spatial resolution (e.g. `--dLat`), the lat/lon boundaries if you don't want the globe and the date ranges and temporal resolution you are interested in (`--startDate`, `--stopDate`, `--dDays` defines the number of days you want to aggregate together (if you set `--monthly`, this will be the step in months). If you set `--compSTD`, the standard deviation of the data within a grid box will be computed (the original variable name will be kept with an `_std` added to it and currently discarding all attributes). This is not necessarily an uncertainty estimate but the true spread of data within a grid box. 
 
 An example on how to run this is
 
