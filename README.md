@@ -1,7 +1,9 @@
 # Generic Gridding Routine
 One single Julia code `gridL2_Dates.jl` to grid all kinds of satellite data onto rectangular grid at arbitrary spacing (and determined spatial and temporal resolution). Input defined just via json files, which makes it generic as long as you have corner coordinates for your satellite dataset (you can grid XCO2, methane CO, etc from TROPOMI or SIF from OCO-2, OCO-3, TROPOMI, GOME-2, etc)..
 
-The main program, gridL2_Dates.jl, can compute gridded averages and save everything into a netCDF4 file that can be read via tools such as python, Julia, Panoply, etc ( 3D dataset with time/lat/lon). Most importantly, it can oversample, i.e. the gridding takes the actual footprint overlap with the final grid into account. This is done by splitting a footprint via its corner coordinates into a set of points nxn within that footprint (typicall n=10, i.e. 100 points). For these, a simple "in-the-box" gridding routine will be applied, i.e. tha algorithm finds in which grid boxe each sub-pixel of a footprint falls. This results in fractional "samples" per grid box.  
+The main program, gridL2_Dates.jl, can compute gridded averages and save everything into a netCDF4 file that can be read via tools such as python, Julia, Panoply, etc ( 3D dataset with time/lat/lon). Most importantly, it can oversample, i.e. the gridding takes the actual footprint overlap with the final grid into account. This is done by splitting a footprint via its corner coordinates into a set of points nxn within that footprint (typicall n=10, i.e. 100 points). For these, a simple "in-the-box" gridding routine will be applied, i.e. tha algorithm finds in which grid boxe each sub-pixel of a footprint falls. This results in fractional "samples" per grid box.
+
+The program was written as a first step into Julia (as everything else was too slow and C++ development time just too long). So, some things are still clumsy and not really "Julian". Feel free to make things more elegant and create a pull request if you have done so. 
 
 ## Install Julia
 
