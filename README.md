@@ -128,4 +128,4 @@ here, we want to make sure that the `qa_value` is larger than 0.3 and that the m
 Please feel free to use this tool but make sure that you help the community if you find bugs, improve it etc. Any modifications that are useful should be made publicly available, you can fork and create a pull request. Also, let us know if you find bugs. On top of that, please acknowledge the tool if you use it in publications.
 
 ## MODIS files
-We use these as well but I have no time to document all of them right now. Contact us if you want to use them.
+We use these as well but I have no time to document all of them right now. Contact us if you want to use them (cfranken"at"caltech.edu).
