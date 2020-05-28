@@ -216,7 +216,7 @@ function favg_all!(arr,std_arr, weight_arr, compSTD, lat,lon,inp,s,s2,n, latMin,
     @inbounds for i in 1:s
         #println(i, " ", dimLat[i], " ", dimLon[i])
         # Take it easy if all corners already fall into one grid box:
-        if (dimLat[i]==1) & (dimLon[i]==1)
+        if (dimLat[i]==0) & (dimLon[i]==0)
             
             weight_arr[iLon[i,1],iLat[i,1]] += 1
             for z in 1:s2
@@ -417,7 +417,8 @@ function main()
                 # Do this onlye once:
                 if fillAttrib
                     for (key, value) in dGrid
-                        attribs = ["units","long_name","valid_range","description"]
+			# Need to change this soon to just go over keys(attrib), not this hard-coded thing. Just want to avoid another fill_value!
+                        attribs = ["units","long_name","valid_range","description","unit","longname"]
                         for at in attribs
                             try
                                 NCDict[key].attrib[at] = getNC_attrib(fin, value, at)
