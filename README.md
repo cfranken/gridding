@@ -19,7 +19,15 @@ julia> ]
 
 ## How to run the program
 
-First, you can test out what options there are (I often do this myself):
+Hint for first time users, you need to use the console/terminal to use it properly. On a Mac, it is good to add an alias, e.g. 
+
+```
+alias julia /Applications/Julia-1.3.app/Contents/Resources/julia/bin/julia
+```
+
+in your .bash_profile or whatever you are using.
+
+Once this is done, you can test out what options there are (I often do this myself):
 
 ```
 $ julia ./gridL2_Dates.jl --help
