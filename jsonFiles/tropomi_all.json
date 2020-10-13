@@ -19,7 +19,6 @@
 	    	"dcCorr": "daily_correction_factor"
 	},
 	"filter_lt":{"sza": 80},
-	"filter_gt":{"phase_angle": 10 },
 	"filePattern": "TROPO_SIF_YYYY-MM-DD_*.nc",
 	"folder": "/net/fluo/data3/projects/TROPOMI/nc_ungridded/"
 }
