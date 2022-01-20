@@ -11,6 +11,7 @@ using Statistics
 using Glob
 # JSON files
 using JSON
+using ProgressMeter
 # Parallel computing
 #using Distributed, SharedArrays
 # Profiler
@@ -70,6 +71,10 @@ function parse_commandline()
                 help = "Time steps in days (or months if --monthly is set)"
                 arg_type = Int64
                 default = 8
+        "--oversample_temporal"
+                help = "Actual averaging period (oversample_temporal*dDays), if >1, similar to moving average"
+                arg_type = Float32
+                default = 1.0f0
     end
     return parse_args(s)
 end
@@ -85,8 +90,8 @@ end
 
 # This splits up the entire region into one grid set
 function divLine!(lat1,lon1,lat2,lon2,n, points,j )
-    dLat = (lat2-lat1)/(2*n)
-    dLon = (lon2-lon1)/(2*n)
+    dLat     = (lat2-lat1)/(2n)
+    dLon     = (lon2-lon1)/(2n)
     startLat = lat1+dLat
     startLon = lon1+dLon
     @inbounds for i in 1:n
@@ -99,8 +104,8 @@ end
 
 # For first run (2 baselines)
 function divLine2!(lat1,lon1,lat2,lon2,n, lats, lons)
-    dLat = (lat2-lat1)/(2*n)
-    dLon = (lon2-lon1)/(2*n)
+    dLat     = (lat2-lat1)/(2n)
+    dLon     = (lon2-lon1)/(2n)
     startLat = lat1+dLat
     startLon = lon1+dLon
     @inbounds for i in 1:n
@@ -122,39 +127,35 @@ end
 
 # Still need to make sure the corners are read in properly!
 function getNC_var(fin, path, DD::Bool)
-    try
-        loc = split(path ,r"/")
-        #println(loc)
-        if length(loc)==1
-            return fin[path].var[:]
-        elseif length(loc)>1
-            gr = []
-            for i in 1:length(loc)-1
-                if i==1
-                    gr = fin.group[loc[i]]
-                else
-                    gr = gr.group[loc[i]]
-                end
-            end
-
-            #println(loc[end])
-            si = size(gr[loc[end]])
-            # DD means there is a 2nd index for footprint bounds of dimension 4!
-            if DD
-                if si[1]==4
-                    return reshape(gr[loc[end]].var[:],4,prod(si[2:end]))'
-                elseif si[end]==4
-                    return reshape(gr[loc[end]].var[:],prod(si[1:end-1]),4)
-                end
+    loc = split(path ,r"/")
+    #@show loc
+    if length(loc)==1
+        return fin[path].var[:]
+    elseif length(loc)>1
+        gr = []
+        for i in 1:length(loc)-1
+            if i==1
+                gr = fin.group[loc[i]]
             else
-                return reshape(gr[loc[end]].var[:],prod(si))
+                gr = gr.group[loc[i]]
             end
         end
-    catch e
-        @show e
-        println("Error in getNC_var ", path)
-        return 0.0
+	   #@show gr
+        #println(loc[end])
+        si = size(gr[loc[end]])
+        # DD means there is a 2nd index for footprint bounds of dimension 4!
+        if DD
+            if si[1]==4
+                return reshape(gr[loc[end]].var[:],4,prod(si[2:end]))'
+            elseif si[end]==4
+                return reshape(gr[loc[end]].var[:],prod(si[1:end-1]),4)
+            end
+        else
+	#@show gr[loc[end]]
+            return reshape(gr[loc[end]].var[:],prod(si))
+        end
     end
+
 
 end
 
@@ -190,32 +191,45 @@ end
 #   return a
 #end
 
+function floorPoints!(points,ix,iy,n)
+    pointsX = @view points[:,:,1]
+    pointsY = @view points[:,:,2]
+    for iC in LinearIndices(pointsX)
+        ix[iC]=floor(pointsX[iC])
+        iy[iC]=floor(pointsY[iC])
+    end
+end
+
+
 function favg_all!(arr,std_arr, weight_arr, compSTD, lat,lon,inp,s,s2,n, latMin, latMax, lonMin, lonMax, nLat, nLon, points)
 
     dim = size(arr)
     #println(dim)
     # Predefine some arrays to reduce allocations
-    ix = zeros(Int32,n^2)
-    iy = zeros(Int32,n^2)
-    lats_0 = zeros(n)
-    lons_0 = zeros(n)
-    lats_1 = zeros(n)
-    lons_1 = zeros(n)
-    iLon = floor.(Int32,lon)
-    iLat = floor.(Int32,lat)
-    minLat = minimum(Int32,floor.(lat), dims=2)
-    maxLat = maximum(Int32,floor.(lat), dims=2)
-    minLon = minimum(Int32,floor.(lon), dims=2)
-    maxLon = maximum(Int32,floor.(lon), dims=2)
+    ix      = zeros(Int32,n^2)
+    iy      = zeros(Int32,n^2)
+    lats_0  = zeros(n)
+    lons_0  = zeros(n)
+    lats_1  = zeros(n)
+    lons_1  = zeros(n)
+    iLon    = floor.(Int32,lon)
+    iLat    = floor.(Int32,lat)
+    minLat  = minimum(Int32,floor.(lat), dims=2)
+    maxLat  = maximum(Int32,floor.(lat), dims=2)
+    minLon  = minimum(Int32,floor.(lon), dims=2)
+    maxLon  = maximum(Int32,floor.(lon), dims=2)
     distLon = maxLon-minLon
     # How many individual grid cells might actually be there:
     dimLat = maxLat-minLat
     dimLon = maxLon-minLon
     fac = Float32(1/n^2)
-
+    #@show s
+    
+    
     @inbounds for i in 1:s
         #println(i, " ", dimLat[i], " ", dimLon[i])
         # Take it easy if all corners already fall into one grid box:
+        #@show distLon[i]
         if (dimLat[i]==0) & (dimLon[i]==0)
             
             weight_arr[iLon[i,1],iLat[i,1]] += 1
@@ -230,16 +244,17 @@ function favg_all!(arr,std_arr, weight_arr, compSTD, lat,lon,inp,s,s2,n, latMin,
         elseif (distLon[i])<n
             getPoints!(points,lat[i,:],lon[i,:],n,lats_0, lons_0,lats_1, lons_1 )
 
-            ix[:] = floor.(Int32,points[:,:,1][:])
-            iy[:] = floor.(Int32,points[:,:,2][:])
+            floorPoints!(points,ix,iy,n)
+            #ix .= floor.(Int32,points[:,:,1][:])
+            #iy .= floor.(Int32,points[:,:,2][:])
             
             @inbounds for j in eachindex(ix)
                 weight_arr[iy[j],ix[j]] += fac;
                 for z in 1:s2
                     mean_old = arr[iy[j],ix[j],z]
-                    arr[iy[j],ix[j],z] = mean_old .+ fac/weight_arr[iy[j],ix[j]] .* (inp[i,z]-mean_old);
+                    arr[iy[j],ix[j],z] = mean_old + fac/weight_arr[iy[j],ix[j]] * (inp[i,z]-mean_old);
                     if compSTD
-                        std_arr[iy[j],ix[j],z] +=  fac .* (inp[i,z]-mean_old) .* (inp[i,z]-arr[iy[j],ix[j],z])
+                        std_arr[iy[j],ix[j],z] +=  fac * (inp[i,z]-mean_old) * (inp[i,z]-arr[iy[j],ix[j],z])
                     end
                 end
             end
@@ -251,7 +266,8 @@ function main()
 
     #addprocs()
     # Parse command line arguments
-    ar = parse_commandline()
+    ar = parse_commandline()    
+    println("Using ", Threads.nthreads(), " threads");
 
     # Find files to be processed
     startDate = DateTime(ar["startDate"])
@@ -324,10 +340,7 @@ function main()
     println(" ")
     #dSIF = defVar(dsOut,"sif",Float32,("lon","lat"),deflatelevel=4, fillvalue=-999)
     dN = defVar(dsOut,"n",Float32,("time","lon","lat"),deflatelevel=4, fillvalue=-999, units="", long_name="Number of pixels in average")
-    # Define data array
-    mat_data          = zeros(Float32,(length(lon),length(lat),length(dGrid)))
-    mat_data_variance = zeros(Float32,(length(lon),length(lat),length(dGrid)))
-    mat_data_weights  = zeros(Float32,(length(lon),length(lat)))
+    
 
     # Still hard-coded here, can be changed:
     nGrid = 10;
@@ -341,9 +354,21 @@ function main()
     # Loop through time:
     # Time counter
     cT = 1
-    for d in startDate:dDay:stopDate
+    p1 = Progress(cT)
+    mat_data          = zeros(Float32,(length(lon),length(lat),length(dGrid)))
+    mat_data_variance = zeros(Float32,(length(lon),length(lat),length(dGrid)))
+    mat_data_weights  = zeros(Float32,(length(lon),length(lat)))
+    nTime = length(startDate:dDay:stopDate)
+
+    dates = collect(startDate:dDay:stopDate)
+    for cT in eachindex(dates)
+        d = dates[cT]
+        # Define data array
+        
+        println("Gridding time slice ", d, " (",cT,"/", nTime,")")
+        ProgressMeter.next!(p1; showvalues = [(:Time, d)])
         files = String[];
-        for di in d:Dates.Day(1):d+dDay-Dates.Day(1)
+        for di in d:Dates.Day(1):d+dDay*ar["oversample_temporal"]-Dates.Day(1)
             #println("$(@sprintf("%04i-%02i-%02i", Dates.year(di),Dates.month(di),Dates.day(di)))")
 
             filePattern = reduce(replace,["YYYY" => lpad(Dates.year(di),4,"0"), "MM" => lpad(Dates.month(di),2,"0"),  "DD" => lpad(Dates.day(di),2,"0")], init=fPattern)
@@ -357,98 +382,111 @@ function main()
         #println(files)
 
         # Loop through all files
+        p = Progress(length(files))
+
         for a in files[fileSize.>0]
-
-            
-            fin = Dataset(a)
-            #println("Read, ", a)
-            
-            # Read lat/lon bounds (required, maybe can change this to simple gridding in the future with just center):
-            lat_in_ = getNC_var(fin, d2["lat_bnd"],true)
-            lon_in_ = getNC_var(fin, d2["lon_bnd"],true)
-            
-            #println("Read")
-            dim = size(lat_in_)
-
-            # Transpose if orders are swapped
-            if dim[1]==4
-                lat_in_ = lat_in_'
-                lon_in_ = lon_in_'
-            end
-
-            # Find all indices within lat/lon bounds:
-            minLat = minimum(lat_in_, dims=2)
-            maxLat = maximum(lat_in_, dims=2)
-            minLon = minimum(lon_in_, dims=2)
-            maxLon = maximum(lon_in_, dims=2)
-
-            # Get indices within the lat/lon bounding box and check filter criteria (the last one filters out data crossing the date boundary):
-            bool_add = (minLat[:,1].>latMin) .+ (maxLat[:,1].<latMax) .+ (minLon[:,1].>lonMin) .+ (maxLon[:,1].<lonMax) .+ ((maxLon[:,1].-minLon[:,1]).<50)
-            
-            bCounter = 5
-            # Look for equalities
-            for (key, value) in f_eq
-                #println(key, " ", value)
-                bool_add += (getNC_var(fin, key,false).==value)
-                bCounter+=1
-            end
-            # Look for >
-            for (key, value) in f_gt
-                bool_add += (getNC_var(fin, key,false).>value)
-                bCounter+=1
-            end
-            # Look for <
-            for (key, value) in f_lt
-                bool_add += (getNC_var(fin, key,false).<value)
-                bCounter+=1
-            end
-
-            # If all were true, bool_add woule be bCounter!
-            idx = findall(bool_add.==bCounter)
-
-            # Read data only for non-empty indices
-            if length(idx) > 0
-                #print(size(lat_in_))
-                mat_in =  zeros(Float32,(length(lat_in_[:,1]),length(dGrid)))
-                dim = size(mat_in)
-                # Read in all entries defined in JSON file:
-                co = 1
+            try
+                fin = Dataset(a)
+                #println("Read, ", a)
                 
-                # Do this onlye once:
-                if fillAttrib
-                    for (key, value) in dGrid
-			# Need to change this soon to just go over keys(attrib), not this hard-coded thing. Just want to avoid another fill_value!
-                        attribs = ["units","long_name","valid_range","description","unit","longname"]
-                        for at in attribs
-                            try
-                                NCDict[key].attrib[at] = getNC_attrib(fin, value, at)
-                            catch e
-                                @show e
-                                println(" Couldn't write attrib ", at)
-                            end
-                        end
+                lat_center = getNC_var(fin, d2["lat"],false)
+                lon_center = getNC_var(fin, d2["lon"],false)
+    
+                bool_found = (lat_center.>latMin) .+ (lat_center.<latMax) .+ (lon_center.>lonMin) .+ (lon_center.<lonMax)
+                if any(bool_found.==4)
+    
+                    # Read lat/lon bounds (required, maybe can change this to simple gridding in the future with just center):
+                    lat_in_ = getNC_var(fin, d2["lat_bnd"],true)
+                    lon_in_ = getNC_var(fin, d2["lon_bnd"],true)
+                    
+                    #println("Read")
+                    dim = size(lat_in_)
+    
+                    # Transpose if orders are swapped
+                    if dim[1]==4
+                        lat_in_ = lat_in_'
+                        lon_in_ = lon_in_'
                     end
-                    fillAttrib=false
+    
+                    # Find all indices within lat/lon bounds:
+                    minLat = minimum(lat_in_, dims=2)
+                    maxLat = maximum(lat_in_, dims=2)
+                    minLon = minimum(lon_in_, dims=2)
+                    maxLon = maximum(lon_in_, dims=2)
+    
+                    # Get indices within the lat/lon bounding box and check filter criteria (the last one filters out data crossing the date boundary):
+                    bool_add = (minLat[:,1].>latMin) .+ (maxLat[:,1].<latMax) .+ (minLon[:,1].>lonMin) .+ (maxLon[:,1].<lonMax) .+ ((maxLon[:,1].-minLon[:,1]).<50)
+                    
+                    bCounter = 5
+                    # Look for equalities
+                    for (key, value) in f_eq
+                        #println(key, " ", value)
+                        bool_add += (getNC_var(fin, key,false).==value)
+                        bCounter+=1
+                    end
+                    # Look for >
+                    for (key, value) in f_gt
+                        bool_add += (getNC_var(fin, key,false).>value)
+                        bCounter+=1
+                    end
+                    # Look for <
+                    for (key, value) in f_lt
+                        bool_add += (getNC_var(fin, key,false).<value)
+                        bCounter+=1
+                    end
+    
+                    # If all were true, bool_add woule be bCounter!
+                    idx = findall(bool_add.==bCounter)
+                    ProgressMeter.next!(p; showvalues = [(:File, a), (:N_pixels, size(idx))])
+                    # Read data only for non-empty indices
+                    if length(idx) > 0
+                        #print(size(lat_in_))
+                        mat_in =  zeros(Float32,(length(lat_in_[:,1]),length(dGrid)))
+                        dim = size(mat_in)
+                        # Read in all entries defined in JSON file:
+                        co = 1
+                        
+                        # Do this onlye once:
+                        if fillAttrib
+                            for (key, value) in dGrid
+    		    	# Need to change this soon to just go over keys(attrib), not this hard-coded thing. Just want to avoid another fill_value!
+                                attribs = ["units","long_name","valid_range","description","unit","longname"]
+                                for at in attribs
+                                    try
+                                        NCDict[key].attrib[at] = getNC_attrib(fin, value, at)
+                                    catch e
+                                        #@show e
+                                        #println(" Couldn't write attrib ", at)
+                                    end
+                                end
+                            end
+                            fillAttrib=false
+                        end
+    
+                        for (key, value) in dGrid
+                            #println(key, value)
+                            mat_in[:,co]=getNC_var(fin, value,false)
+                            co += 1
+                        end
+    
+                        iLat_ = ((lat_in_[idx,:].-latMin)/(latMax-latMin)*length(lat)).+1
+                        iLon_ = ((lon_in_[idx,:].-lonMin)/(lonMax-lonMin)*length(lon)).+1
+    
+                        favg_all!(mat_data, mat_data_variance, mat_data_weights, ar["compSTD"], iLat_,iLon_,mat_in[idx,:],length(idx),dim[2],nGrid, latMin, latMax, lonMin,lonMax, length(lat), length(lon), points )
+                        #println("Read ", a, " ", length(idx))
+                    else
+                        #println("Read ", a, " ", length(idx))
+                    end
+                    close(fin)
+                else
+                    ProgressMeter.next!(p; showvalues = [(:File, a), (:N_pixels, 0)])
+                    close(fin)
                 end
 
-                for (key, value) in dGrid
-                    #println(key, value)
-                    mat_in[:,co]=getNC_var(fin, value,false)
-                    co += 1
-                end
-
-                iLat_ = ((lat_in_[idx,:].-latMin)/(latMax-latMin)*length(lat)).+1
-                iLon_ = ((lon_in_[idx,:].-lonMin)/(lonMax-lonMin)*length(lon)).+1
-
-                @time  favg_all!(mat_data, mat_data_variance, mat_data_weights, ar["compSTD"], iLat_,iLon_,mat_in[idx,:],length(idx),dim[2],nGrid, latMin, latMax, lonMin,lonMax, length(lat), length(lon), points )
-                println("Read ", a, " ", length(idx))
-            else
-                println("Read ", a, " ", length(idx))
+                
+            catch
+               println("Error in file caught")
             end
-            close(fin)
-    #       catch
-    #           println("Error in file caught")
-    #       end
         end
         # Filter all data, set averages, still need to change row/column order here in the future!
         dims = size(mat_data)
@@ -475,7 +513,7 @@ function main()
             dsTime[cT]=d
 
         end
-        cT += 1
+        #cT += 1
         fill!(mat_data,0.0)
         fill!(mat_data_weights,0.0)
         fill!(mat_data_variance,0.0)
